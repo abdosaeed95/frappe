@@ -119,9 +119,6 @@ class SiteMigration:
 			skip_failing=self.skip_failing, patch_type=PatchType.pre_model_sync
 		)
 		frappe.model.sync.sync_all()
-		frappe.modules.patch_handler.run_all(
-			skip_failing=self.skip_failing, patch_type=PatchType.post_model_sync
-		)
 
 	@atomic
 	def post_schema_updates(self):
@@ -131,6 +128,7 @@ class SiteMigration:
 		* Sync fixtures & custom scripts
 		* Sync in-Desk Module Dashboards
 		* Sync customizations: Custom Fields, Property Setters, Custom Permissions
+  		* Runngin post-model-sync patches
 		* Sync Frappe's internal language master
 		* Flush deferred inserts made during maintenance mode.
 		* Sync Portal Menu Items
@@ -149,6 +147,11 @@ class SiteMigration:
 
 		print("Syncing customizations...")
 		sync_customizations()
+
+		print("Running post-model-sync patches...")
+		frappe.modules.patch_handler.run_all(
+			skip_failing=self.skip_failing, patch_type=PatchType.post_model_sync
+		)
 
 		print("Syncing languages...")
 		sync_languages()
