@@ -1,10 +1,25 @@
+from collections import defaultdict
+from unittest.mock import patch
+
 import frappe
 from frappe.boot import get_unseen_notes, get_user_pages_or_reports
 from frappe.desk.doctype.note.note import _get_unseen_notes, mark_as_seen
+from frappe.permissions import has_permission
 from frappe.tests.utils import FrappeTestCase
 
 
 class TestBootData(FrappeTestCase):
+	def test_guest_report_permissions_are_reused_in_a_request(self):
+		frappe.cache.delete_value("has_role:Report", user="Guest")
+		with (
+			self.set_user("Guest"),
+			patch.object(frappe.local, "request_cache", defaultdict(dict), create=True),
+			patch("frappe.boot.has_permission", wraps=has_permission) as check_permission,
+		):
+			self.assertEqual(get_user_pages_or_reports("Report", cache=True), {})
+			self.assertEqual(get_user_pages_or_reports("Report", cache=True), {})
+			check_permission.assert_called_once_with("Report", raise_exception=False)
+
 	def test_get_unseen_notes(self):
 		frappe.db.delete("Note")
 		frappe.db.delete("Note Seen By")

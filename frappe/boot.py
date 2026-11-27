@@ -30,6 +30,7 @@ from frappe.social.doctype.energy_point_settings.energy_point_settings import (
 	is_energy_point_enabled,
 )
 from frappe.utils import add_user_info, cstr, get_system_timezone
+from frappe.utils.caching import request_cache
 from frappe.utils.change_log import get_versions
 from frappe.utils.frappecloud import on_frappecloud
 from frappe.website.doctype.web_page_view.web_page_view import is_tracking_enabled
@@ -196,18 +197,32 @@ def get_allowed_report_names(cache=False) -> set[str]:
 
 
 def get_user_pages_or_reports(parent, cache=False):
+	if cache and parent == "Report":
+		return _get_cached_report_permissions(frappe.session.user)
+	return _get_user_pages_or_reports(parent, cache)
+
+
+@request_cache
+def _get_cached_report_permissions(_user):
+	# Reuse even an empty allowlist without extending how long it is cached.
+	return _get_user_pages_or_reports("Report", cache=True)
+
+
+def _get_user_pages_or_reports(parent, cache):
 	if cache:
 		has_role = frappe.cache.get_value("has_role:" + parent, user=frappe.session.user)
 		if has_role:
 			return has_role
+
+	is_report = parent == "Report"
+	if is_report and not has_permission("Report", raise_exception=False):
+		return {}
 
 	roles = frappe.get_roles()
 	has_role = {}
 
 	page = DocType("Page")
 	report = DocType("Report")
-
-	is_report = parent == "Report"
 
 	if is_report:
 		columns = (report.name.as_("title"), report.ref_doctype, report.report_type, report.module)
@@ -285,9 +300,6 @@ def get_user_pages_or_reports(parent, cache=False):
 				has_role[r.name] |= {"ref_doctype": r.ref_doctype}
 
 	if is_report:
-		if not has_permission("Report", raise_exception=False):
-			return {}
-
 		reports = frappe.get_list(
 			"Report",
 			fields=["name", "report_type"],
